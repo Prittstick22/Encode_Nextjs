@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui"
 import { PublicKey } from "@solana/web3.js"
@@ -9,27 +9,85 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Search, AlertTriangle, CheckCircle, Shield } from "lucide-react"
+import {
+  Loader2,
+  Search,
+  AlertTriangle,
+  CheckCircle,
+  Shield,
+  ArrowDownLeft,
+  ArrowUpRight,
+  RefreshCw,
+} from "lucide-react"
 import { analyzeWallet } from "@/lib/fraud-detection"
 import type { WalletAnalysis } from "@/lib/fraud-detection"
+
+const AUTO_REFRESH_INTERVAL = 15000 // 15 seconds
 
 export function WalletAnalyzer() {
   const { connection } = useConnection()
   const { publicKey } = useWallet()
   const [walletAddress, setWalletAddress] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
+  const [currentAnalyzedAddress, setCurrentAnalyzedAddress] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [analysis, setAnalysis] = useState<WalletAnalysis | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [expandedSignatures, setExpandedSignatures] = useState<Set<number>>(new Set())
+
+  useEffect(() => {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+
+    // Set up auto-refresh if we have an analyzed address
+    if (currentAnalyzedAddress && analysis) {
+      intervalRef.current = setInterval(async () => {
+        try {
+          setIsAutoRefreshing(true)
+          const pubKey = new PublicKey(currentAnalyzedAddress)
+          const result = await analyzeWallet(connection, pubKey)
+          setAnalysis(result)
+          setLastUpdated(new Date())
+        } catch (err) {
+          console.error("[v0] Auto-refresh error:", err)
+        } finally {
+          setIsAutoRefreshing(false)
+        }
+      }, AUTO_REFRESH_INTERVAL)
+    }
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [currentAnalyzedAddress, analysis, connection])
 
   const handleAnalyze = async () => {
     setError(null)
     setAnalysis(null)
+    setCurrentAnalyzedAddress(null)
 
-    // Use connected wallet or manual input
-    const addressToAnalyze = walletAddress || publicKey?.toBase58()
+    // Use manual input first, then fall back to connected wallet
+    const addressToAnalyze = walletAddress.trim() || publicKey?.toBase58()
 
     if (!addressToAnalyze) {
       setError("Please connect a wallet or enter a wallet address")
+      return
+    }
+
+    // Validate the address format
+    try {
+      new PublicKey(addressToAnalyze)
+    } catch {
+      setError("Invalid Solana wallet address format")
       return
     }
 
@@ -38,11 +96,32 @@ export function WalletAnalyzer() {
       const pubKey = new PublicKey(addressToAnalyze)
       const result = await analyzeWallet(connection, pubKey)
       setAnalysis(result)
+      setCurrentAnalyzedAddress(addressToAnalyze)
+      setLastUpdated(new Date())
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to analyze wallet")
+      if (err instanceof Error) {
+        if (err.message.includes("rejected")) {
+          setError("Wallet connection was rejected. Please try again or enter an address manually.")
+        } else if (err.message.includes("Invalid public key")) {
+          setError("Invalid wallet address. Please check and try again.")
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError("Failed to analyze wallet. Please try again.")
+      }
     } finally {
       setIsAnalyzing(false)
     }
+  }
+
+  const getTimeAgo = (date: Date) => {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
+    if (seconds < 60) return `${seconds}s ago`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    return `${hours}h ago`
   }
 
   const getRiskColor = (score: number) => {
@@ -72,6 +151,18 @@ export function WalletAnalyzer() {
         Low Risk
       </Badge>
     )
+  }
+
+  const toggleSignature = (index: number) => {
+    setExpandedSignatures((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        newSet.add(index)
+      }
+      return newSet
+    })
   }
 
   return (
@@ -131,6 +222,14 @@ export function WalletAnalyzer() {
 
       {analysis && (
         <div className="space-y-4">
+          {lastUpdated && (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className={`h-3 w-3 ${isAutoRefreshing ? "animate-spin" : ""}`} />
+              <span>{isAutoRefreshing ? "Updating..." : `Last updated ${getTimeAgo(lastUpdated)}`}</span>
+              <span className="text-xs">• Auto-refreshing every 15s</span>
+            </div>
+          )}
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -204,16 +303,37 @@ export function WalletAnalyzer() {
                 {analysis.recentTransactions.map((tx, index) => (
                   <div key={index} className="flex items-center justify-between rounded-lg border bg-card p-3">
                     <div className="flex-1">
-                      <div className="font-mono text-sm">
-                        {tx.signature.slice(0, 8)}...{tx.signature.slice(-8)}
-                      </div>
+                      <button
+                        onClick={() => toggleSignature(index)}
+                        className="font-mono text-sm text-left hover:text-primary transition-colors cursor-pointer underline decoration-dotted underline-offset-2"
+                        title="Click to toggle full address"
+                      >
+                        {expandedSignatures.has(index)
+                          ? tx.signature
+                          : `${tx.signature.slice(0, 8)}...${tx.signature.slice(-8)}`}
+                      </button>
                       <div className="text-xs text-muted-foreground">
                         {new Date(tx.timestamp * 1000).toLocaleString()}
                       </div>
                     </div>
-                    <Badge variant={tx.suspicious ? "destructive" : "secondary"}>
-                      {tx.suspicious ? "Suspicious" : "Normal"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {tx.amount !== null && <span className="text-sm font-medium">{tx.amount.toFixed(4)} SOL</span>}
+                      {tx.direction === "ingress" && (
+                        <Badge variant="secondary" className="gap-1 bg-accent/20 text-accent">
+                          <ArrowDownLeft className="h-3 w-3" />
+                          Ingress
+                        </Badge>
+                      )}
+                      {tx.direction === "egress" && (
+                        <Badge variant="secondary" className="gap-1 bg-purple-500/20 text-purple-400">
+                          <ArrowUpRight className="h-3 w-3" />
+                          Egress
+                        </Badge>
+                      )}
+                      <Badge variant={tx.suspicious ? "destructive" : "secondary"}>
+                        {tx.suspicious ? "Suspicious" : "Normal"}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>

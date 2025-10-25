@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@radix-ui/react-slot':
+        specifier: latest
+        version: 1.2.3(@types/react@19.0.0)(react@19.0.0)
       '@solana/wallet-adapter-base':
         specifier: ^0.9.23
         version: 0.9.23(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.0.2)(utf-8-validate@5.0.10))
@@ -38,6 +41,9 @@ importers:
       next:
         specifier: ^16.0.0
         version: 16.0.0(@babel/core@7.28.5)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      next-themes:
+        specifier: latest
+        version: 0.4.6(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       react:
         specifier: ^19.0.0
         version: 19.0.0
@@ -659,6 +665,24 @@ packages:
 
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
+
+  '@radix-ui/react-compose-refs@1.1.2':
+    resolution: {integrity: sha512-z4eqJvfiNnFMHIIvXP3CY57y2WJs5g2v3X0zm9mEJkrkNv4rDxu+sg9Jh8EkXyeqBkB7SOcboo9dMVqhyrACIg==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  '@radix-ui/react-slot@1.2.3':
+    resolution: {integrity: sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   '@react-native-async-storage/async-storage@1.24.0':
     resolution: {integrity: sha512-W4/vbwUOYOjco0x3toB8QCr7EjIP6nE9G7o8PMguvvjYT5Awg09lyV4enACRx4s++PPulBiBSjL0KTFx2u0Z/g==}
@@ -3067,6 +3091,12 @@ packages:
     resolution: {integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==}
     engines: {node: '>= 0.6'}
 
+  next-themes@0.4.6:
+    resolution: {integrity: sha512-pZvgD5L0IEvX5/9GWyHMf3m8BKiVQwsCMHfoFosXtXBMnaS0ZnIJ9ST4b4NqLVKDEm8QBxoNNGNaBv2JNF6XNA==}
+    peerDependencies:
+      react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+      react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+
   next@16.0.0:
     resolution: {integrity: sha512-nYohiNdxGu4OmBzggxy9rczmjIGI+TpR5vbKTsE1HqYwNm1B+YSiugSrFguX6omMOKnDHAmBPY4+8TNJk0Idyg==}
     engines: {node: '>=20.9.0'}
@@ -4720,6 +4750,19 @@ snapshots:
   '@protobufjs/pool@1.1.0': {}
 
   '@protobufjs/utf8@1.1.0': {}
+
+  '@radix-ui/react-compose-refs@1.1.2(@types/react@19.0.0)(react@19.0.0)':
+    dependencies:
+      react: 19.0.0
+    optionalDependencies:
+      '@types/react': 19.0.0
+
+  '@radix-ui/react-slot@1.2.3(@types/react@19.0.0)(react@19.0.0)':
+    dependencies:
+      '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.0.0)(react@19.0.0)
+      react: 19.0.0
+    optionalDependencies:
+      '@types/react': 19.0.0
 
   '@react-native-async-storage/async-storage@1.24.0(react-native@0.82.1(@babel/core@7.28.5)(@types/react@19.0.0)(bufferutil@4.0.9)(react@19.0.0)(utf-8-validate@5.0.10))':
     dependencies:
@@ -8569,6 +8612,11 @@ snapshots:
   nanoid@3.3.11: {}
 
   negotiator@0.6.3: {}
+
+  next-themes@0.4.6(react-dom@19.0.0(react@19.0.0))(react@19.0.0):
+    dependencies:
+      react: 19.0.0
+      react-dom: 19.0.0(react@19.0.0)
 
   next@16.0.0(@babel/core@7.28.5)(react-dom@19.0.0(react@19.0.0))(react@19.0.0):
     dependencies:

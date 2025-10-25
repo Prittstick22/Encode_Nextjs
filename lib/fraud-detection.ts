@@ -4,6 +4,8 @@ export interface TransactionInfo {
   signature: string
   timestamp: number
   suspicious: boolean
+  amount: number | null // Amount in SOL, null if unable to determine
+  direction: "ingress" | "egress" | "unknown"
 }
 
 export interface WalletAnalysis {
@@ -26,11 +28,64 @@ export async function analyzeWallet(connection: Connection, publicKey: PublicKey
 
     // Analyze transaction patterns
     const timestamps: number[] = []
+    const amounts: number[] = []
 
     for (const sig of signatures.slice(0, 10)) {
       if (!sig.blockTime) continue
 
       timestamps.push(sig.blockTime)
+
+      let amount: number | null = null
+      let direction: "ingress" | "egress" | "unknown" = "unknown"
+
+      try {
+        const txDetails = await connection.getTransaction(sig.signature, {
+          maxSupportedTransactionVersion: 0,
+        })
+
+        if (txDetails?.meta && txDetails.transaction) {
+          const accountKeys = txDetails.transaction.message.getAccountKeys().staticAccountKeys
+          let accountIndex = -1
+
+          for (let i = 0; i < accountKeys.length; i++) {
+            if (accountKeys[i].equals(publicKey)) {
+              accountIndex = i
+              break
+            }
+          }
+
+          console.log("[v0] Transaction:", sig.signature.slice(0, 8))
+          console.log("[v0] Account index:", accountIndex)
+
+          if (accountIndex !== -1 && accountIndex < txDetails.meta.preBalances.length) {
+            // Calculate SOL amount from pre and post balances for the correct account
+            const preBalance = txDetails.meta.preBalances[accountIndex] || 0
+            const postBalance = txDetails.meta.postBalances[accountIndex] || 0
+            const lamportsDiff = Math.abs(preBalance - postBalance)
+            amount = lamportsDiff / 1e9 // Convert lamports to SOL
+
+            console.log("[v0] Pre balance:", preBalance / 1e9, "SOL")
+            console.log("[v0] Post balance:", postBalance / 1e9, "SOL")
+            console.log("[v0] Amount:", amount, "SOL")
+
+            // Determine direction based on balance change
+            if (postBalance > preBalance) {
+              direction = "ingress" // Incoming transaction (balance increased)
+              console.log("[v0] Direction: INGRESS (received)")
+            } else if (postBalance < preBalance) {
+              direction = "egress" // Outgoing transaction (balance decreased)
+              console.log("[v0] Direction: EGRESS (sent)")
+            }
+
+            if (amount > 0) {
+              amounts.push(amount)
+            }
+          }
+        }
+      } catch (error) {
+        // If we can't fetch transaction details, continue without amount
+        console.error(`Failed to fetch transaction ${sig.signature}:`, error)
+      }
 
       // Check for suspicious patterns
       const isSuspicious = sig.err !== null
@@ -39,6 +94,8 @@ export async function analyzeWallet(connection: Connection, publicKey: PublicKey
         signature: sig.signature,
         timestamp: sig.blockTime,
         suspicious: isSuspicious,
+        amount,
+        direction,
       })
 
       if (isSuspicious) {
@@ -56,9 +113,29 @@ export async function analyzeWallet(connection: Connection, publicKey: PublicKey
       const avgTimeDiff = timeDiffs.reduce((a, b) => a + b, 0) / timeDiffs.length
 
       // If average time between transactions is less than 5 seconds
-      if (avgTimeDiff < 5) {
+      if (avgTimeDiff < 15) {
         flags.push("Rapid transaction pattern detected - possible bot activity")
         suspiciousCount += 5
+      }
+    }
+
+    if (amounts.length > 0 && timestamps.length > 0) {
+      const maxAmount = Math.max(...amounts)
+      const oldestTx = Math.min(...timestamps)
+      const walletAge = Date.now() / 1000 - oldestTx
+      const daysOld = walletAge / (60 * 60 * 24)
+
+      // If wallet is less than 3 days old and has transfers over 10 SOL
+      if (daysOld < 3 && maxAmount > 10) {
+        flags.push(`Large transfer detected from new wallet (${maxAmount.toFixed(2)} SOL)`)
+        suspiciousCount += 3
+      }
+
+      // Detect unusual amount patterns (many small transactions)
+      const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length
+      if (amounts.length > 5 && avgAmount < 0.01) {
+        flags.push("Multiple micro-transactions detected - possible spam or bot activity")
+        suspiciousCount += 2
       }
     }
 
@@ -70,7 +147,7 @@ export async function analyzeWallet(connection: Connection, publicKey: PublicKey
     }
 
     // Check for very new wallet with high activity
-    if (signatures.length > 20 && timestamps.length > 0) {
+    if (signatures.length > 10 && timestamps.length > 0) {
       const oldestTx = Math.min(...timestamps)
       const walletAge = Date.now() / 1000 - oldestTx
       const daysOld = walletAge / (60 * 60 * 24)

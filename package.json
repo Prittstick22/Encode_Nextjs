@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "latest",
     "@solana/wallet-adapter-base": "^0.9.23",
     "@solana/wallet-adapter-react": "latest",
     "@solana/wallet-adapter-react-ui": "latest",
@@ -19,6 +20,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.454.0",
     "next": "^16.0.0",
+    "next-themes": "latest",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.5.5",
